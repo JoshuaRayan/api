@@ -11,6 +11,7 @@ import urllib.parse
 from flask_cors import CORS # Import CORS
 import eventlet
 import eventlet.wsgi
+import logging
 
 from google_calendar import find_free_slots, book_meeting, get_calendar_service_instance, update_appointment, delete_appointment
 from config import BLAND_AI_API_KEY, BLAND_AI_WEBHOOK_SECRET, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, BLAND_AI_INBOUND_NUMBER
@@ -23,6 +24,7 @@ origins = [
     "http://localhost:3000", # Your Next.js development server
     "http://localhost:8000", # If the frontend is ever served from the same origin as Flask itself (less common)\
     "https://1e7a-49-206-134-217.ngrok-free.app",
+    "https://api-625p.onrender.com",
     # Add your ngrok URL if you're accessing backend from Next.js via ngrok, e.g., "https://your-unique-id.ngrok-free.app"
 ]
 
@@ -35,6 +37,9 @@ CORS(app, resources={r"/*": {"origins": origins}}) # Initialize CORS for your Fl
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
 IST = pytz.timezone('Asia/Kolkata')
 active_calls = {}
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 
 def get_base_url():
     if request.headers.get('X-Forwarded-Proto'):
@@ -380,8 +385,13 @@ def redirect_and_end_call():
         print(error_message)
         return jsonify({"status": "error", "message": error_message}), 500
 
-@app.route('/bland-ai/list_calls', methods=['GET'])
+@app.route('/bland-ai/list_calls', methods=['GET', 'OPTIONS'])
 def list_bland_ai_calls():
+    logging.info(f"Received {request.method} request to /bland-ai/list_calls")
+    logging.info(f"Request headers: {dict(request.headers)}")
+    if request.method == 'OPTIONS':
+        logging.info("Handling CORS preflight OPTIONS request.")
+        return '', 200
     headers = {
         'Authorization': BLAND_AI_API_KEY,
     }
@@ -393,7 +403,6 @@ def list_bland_ai_calls():
         active_inbound_calls = []
         for call in calls_data:
             call_id = call.get('call_id')
-            
             current_twilio_sid = active_calls.get(call_id, {}).get('twilio_sid')
             if current_twilio_sid is None:
                 current_twilio_sid = call.get('sid')
@@ -408,7 +417,6 @@ def list_bland_ai_calls():
                         'twilio_sid': current_twilio_sid,
                         'from_number': from_number
                     }
-            
             if call.get('inbound') == True and call.get('queue_status') in ['started', 'allocated', 'queued', 'new', 'pending']:
                 active_inbound_calls.append({
                     'call_id': call.get('call_id'),
@@ -428,9 +436,8 @@ def list_bland_ai_calls():
                     'created_at': call.get('created_at'),
                     'twilio_call_sid': current_twilio_sid # Use the retrieved Twilio CallSid
                 })
-
+        logging.info(f"Returning {len(active_inbound_calls)} active inbound calls.")
         return jsonify({"active_inbound_calls": active_inbound_calls}), 200
-
     except requests.exceptions.RequestException as e:
         error_message = f"Failed to retrieve calls from Bland AI: {e}"
         if e.response is not None:
@@ -439,8 +446,11 @@ def list_bland_ai_calls():
                 error_message += f" - Bland AI response: {error_json}"
             except ValueError:
                 error_message += f" - Bland AI raw response: {e.response.text}"
-        print(error_message)
+        logging.error(error_message)
         return jsonify({"error": error_message}), e.response.status_code if e.response is not None else 500
+    except Exception as e:
+        logging.error(f"Unexpected error in /bland-ai/list_calls: {e}")
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/bland-ai/webhook', methods=['POST']) # webhook for call events
 def bland_ai_webhook():
