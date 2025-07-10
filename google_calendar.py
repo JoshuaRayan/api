@@ -14,9 +14,7 @@ import json
 
 from dotenv import load_dotenv
 
-import pyaudio
 import pygame
-import speech_recognition as sr
 import httpx
 
 import google.generativeai as genai
@@ -300,51 +298,6 @@ def get_gemini_response(chat: genai.GenerativeModel.start_chat, prompt: str) -> 
         else:
             # For other errors, return a generic, speakable message
             return "I encountered an unexpected error. Please try again."
-
-# --- Speech-to-Text (STT) Function (Synchronous) ---
-def listen_for_speech_sync(device_index: int = 2) -> str:
-    """
-    Listens for speech from the microphone and transcribes it using Google Web Speech API (synchronously).
-    
-    Args:
-        device_index: The index of the input audio device to use.
-        
-    Returns:
-        The transcribed text, or an empty string if no speech is recognized.
-    """
-    recognizer = sr.Recognizer()
-    # Adjust for ambient noise for better accuracy
-    recognizer.energy_threshold = 3000  # Lower threshold for better sensitivity
-    recognizer.dynamic_energy_threshold = True
-    recognizer.pause_threshold = 0.8  # Slightly longer pause before considering the end of speech
-    recognizer.operation_timeout = 10  # Timeout for operations (max 10s for recognition)
-
-    print("\nListening for your input... (Speak now)")
-    with sr.Microphone(device_index=device_index, sample_rate=RATE) as source:
-        print("Adjusting for ambient noise, please wait...")
-        recognizer.adjust_for_ambient_noise(source, duration=1)
-        print("Microphone adjusted. Speak now.")
-        try:
-            # Listen for up to 5 seconds of speech, with a phrase limit of 10 seconds
-            audio = recognizer.listen(source, timeout=5, phrase_time_limit=10) 
-            print("Audio captured. Transcribing...")
-            
-            # Use Google Web Speech API for transcription
-            text = recognizer.recognize_google(audio)
-            print(f"User: {text}")
-            return text.strip()
-        except sr.WaitTimeoutError:
-            print("No speech detected after initial wait.")
-            return ""
-        except sr.UnknownValueError:
-            print("Could not understand audio.")
-            return ""
-        except sr.RequestError as e:
-            print(f"Could not request results from Google Web Speech API; {e}")
-            return ""
-        except Exception as e:
-            print(f"An unexpected error occurred during speech recognition: {e}")
-            return ""
 
 # --- Text-to-Speech (TTS) Function (Synchronous) ---
 def speak_text_sync(text: str):
