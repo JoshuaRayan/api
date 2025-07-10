@@ -9,6 +9,8 @@ from twilio.rest import Client
 from twilio.twiml.voice_response import VoiceResponse
 import urllib.parse
 from flask_cors import CORS # Import CORS
+import eventlet
+import eventlet.wsgi
 
 from google_calendar import find_free_slots, book_meeting, get_calendar_service_instance, update_appointment, delete_appointment
 from config import BLAND_AI_API_KEY, BLAND_AI_WEBHOOK_SECRET, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, BLAND_AI_INBOUND_NUMBER
@@ -507,4 +509,6 @@ def get_bland_ai_transcript(call_id):
         return jsonify({"error": error_message}), e.response.status_code if e.response is not None else 500
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, port=8000)
+    # Use eventlet for production
+    eventlet.monkey_patch()
+    socketio.run(app, host='0.0.0.0', port=8000)
