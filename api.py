@@ -46,10 +46,6 @@ def get_base_url():
         return f"{request.headers['X-Forwarded-Proto']}://{request.headers['Host']}"
     return request.url_root.rstrip('/')
 
-@app.route('/')
-def index():
-    return render_template('index.html')
-
 @app.route('/inbound-calls')
 def inbound_calls():
     return render_template('inbound_calls.html')
@@ -406,17 +402,18 @@ def list_bland_ai_calls():
             current_twilio_sid = active_calls.get(call_id, {}).get('twilio_sid')
             if current_twilio_sid is None:
                 current_twilio_sid = call.get('sid')
-            if current_twilio_sid is None and call.get('inbound') == True and call_id:
-                detail_response = requests.get(f'https://api.bland.ai/v1/calls/{call_id}', headers=headers)
-                detail_response.raise_for_status()
-                detailed_call_data = detail_response.json()
-                current_twilio_sid = detailed_call_data.get('sid')
-                from_number = detailed_call_data.get('from')
-                if current_twilio_sid and from_number:
-                    active_calls[call_id] = {
-                        'twilio_sid': current_twilio_sid,
-                        'from_number': from_number
-                    }
+            # Temporarily comment out the detailed call fetch to debug recursion
+            # if current_twilio_sid is None and call.get('inbound') == True and call_id:
+            #     detail_response = requests.get(f'https://api.bland.ai/v1/calls/{call_id}', headers=headers)
+            #     detail_response.raise_for_status()
+            #     detailed_call_data = detail_response.json()
+            #     current_twilio_sid = detailed_call_data.get('sid')
+            #     from_number = detailed_call_data.get('from')
+            #     if current_twilio_sid and from_number:
+            #         active_calls[call_id] = {
+            #             'twilio_sid': current_twilio_sid,
+            #             'from_number': from_number
+            #         }
             if call.get('inbound') == True and call.get('queue_status') in ['started', 'allocated', 'queued', 'new', 'pending']:
                 active_inbound_calls.append({
                     'call_id': call.get('call_id'),
