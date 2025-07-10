@@ -1,0 +1,15 @@
+Flask
+Flask-SocketIO
+Flask-Cors
+requests
+pytz
+python-dotenv
+twilio
+google-api-python-client
+google-auth-oauthlib
+google-auth
+pygame
+pyaudio
+speechrecognition
+httpx
+google-generativeai 
