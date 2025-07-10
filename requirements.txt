@@ -11,3 +11,4 @@ google-auth
 pygame
 httpx
 google-generativeai 
+eventlet
