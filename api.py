@@ -31,12 +31,12 @@ origins = [
 socketio = SocketIO(app, cors_allowed_origins=origins) # Use defined origins for SocketIO
 
 # Apply CORS middleware to Flask app.
-# The resources parameter is important for specific route-level CORS.
-CORS(app, resources={r"/*": {"origins": origins}}) # Initialize CORS for your Flask app
+# Changed to a simpler global CORS application to debug recursion
+CORS(app, origins=origins)
 
 twilio_client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
-IST = pytz.timezone('Asia/Kolkata')
-active_calls = {}
+# IST = pytz.timezone('Asia/Kolkata') # Keeping this as it's used in calendar logic
+# Removed active_calls global variable for debugging recursion
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -327,13 +327,17 @@ def redirect_and_end_call():
     if not bland_ai_call_id:
         return jsonify({"error": "Bland AI Call ID is required."}), 400
 
-    call_info = active_calls.get(bland_ai_call_id)
+    # Removed active_calls logic for debugging recursion
+    # call_info = active_calls.get(bland_ai_call_id)
 
-    if not call_info:
-        return jsonify({"error": "No active call found for the given Bland AI Call ID."}), 404
+    # if not call_info:
+    #     return jsonify({"error": "No active call found for the given Bland AI Call ID."}), 404
 
-    twilio_call_sid = call_info.get('twilio_sid')
-    from_number = call_info.get('from_number')
+    # twilio_call_sid = call_info.get('twilio_sid')
+    # from_number = call_info.get('from_number')
+
+    # Using a placeholder Twilio SID for now as active_calls is removed
+    twilio_call_sid = "REMOVED_FOR_DEBUGGING_TWILIO_SID"
 
     if not twilio_call_sid:
         return jsonify({"error": "Twilio CallSid not found for this Bland AI Call ID. Cannot redirect or end Twilio leg."}), 400
@@ -368,9 +372,9 @@ def redirect_and_end_call():
         twilio_client.calls(twilio_call_sid).update(method='POST', url=redirect_url)
         print(f"Twilio CallSid {twilio_call_sid} redirected to {redirect_url}")
 
-        # Clean up the active_calls entry
-        if bland_ai_call_id in active_calls:
-            del active_calls[bland_ai_call_id]
+        # Removed active_calls cleanup for debugging recursion
+        # if bland_ai_call_id in active_calls:
+        #     del active_calls[bland_ai_call_id]
 
         status_message = "Call redirected and termination attempted."
 
@@ -388,66 +392,10 @@ def list_bland_ai_calls():
     if request.method == 'OPTIONS':
         logging.info("Handling CORS preflight OPTIONS request.")
         return '', 200
-    headers = {
-        'Authorization': BLAND_AI_API_KEY,
-    }
-    try:
-        response = requests.get('https://api.bland.ai/v1/calls', headers=headers)
-        response.raise_for_status()
-        calls_data = response.json().get('calls', [])
-        
-        active_inbound_calls = []
-        for call in calls_data:
-            call_id = call.get('call_id')
-            current_twilio_sid = active_calls.get(call_id, {}).get('twilio_sid')
-            if current_twilio_sid is None:
-                current_twilio_sid = call.get('sid')
-            # Temporarily comment out the detailed call fetch to debug recursion
-            # if current_twilio_sid is None and call.get('inbound') == True and call_id:
-            #     detail_response = requests.get(f'https://api.bland.ai/v1/calls/{call_id}', headers=headers)
-            #     detail_response.raise_for_status()
-            #     detailed_call_data = detail_response.json()
-            #     current_twilio_sid = detailed_call_data.get('sid')
-            #     from_number = detailed_call_data.get('from')
-            #     if current_twilio_sid and from_number:
-            #         active_calls[call_id] = {
-            #             'twilio_sid': current_twilio_sid,
-            #             'from_number': from_number
-            #         }
-            if call.get('inbound') == True and call.get('queue_status') in ['started', 'allocated', 'queued', 'new', 'pending']:
-                active_inbound_calls.append({
-                    'call_id': call.get('call_id'),
-                    'from_number': call.get('from'),
-                    'to_number': call.get('to'),
-                    'status': call.get('queue_status'),
-                    'created_at': call.get('created_at'),
-                    'twilio_call_sid': current_twilio_sid # Use the retrieved Twilio CallSid
-                })
-            elif call.get('inbound') == True and call.get('queue_status') == 'completed' and \
-                 (datetime.datetime.now(pytz.utc) - datetime.datetime.fromisoformat(call.get('created_at').replace('Z', '+00:00'))).total_seconds() < 300: # Last 5 minutes
-                active_inbound_calls.append({
-                    'call_id': call.get('call_id'),
-                    'from_number': call.get('from'),
-                    'to_number': call.get('to'),
-                    'status': call.get('queue_status'),
-                    'created_at': call.get('created_at'),
-                    'twilio_call_sid': current_twilio_sid # Use the retrieved Twilio CallSid
-                })
-        logging.info(f"Returning {len(active_inbound_calls)} active inbound calls.")
-        return jsonify({"active_inbound_calls": active_inbound_calls}), 200
-    except requests.exceptions.RequestException as e:
-        error_message = f"Failed to retrieve calls from Bland AI: {e}"
-        if e.response is not None:
-            try:
-                error_json = e.response.json()
-                error_message += f" - Bland AI response: {error_json}"
-            except ValueError:
-                error_message += f" - Bland AI raw response: {e.response.text}"
-        logging.error(error_message)
-        return jsonify({"error": error_message}), e.response.status_code if e.response is not None else 500
-    except Exception as e:
-        logging.error(f"Unexpected error in /bland-ai/list_calls: {e}")
-        return jsonify({"error": str(e)}), 500
+    
+    # Temporarily returning a static response to debug recursion
+    logging.info("Returning static response for /bland-ai/list_calls to debug recursion.")
+    return jsonify({"active_inbound_calls": []}), 200
 
 @app.route('/bland-ai/webhook', methods=['POST']) # webhook for call events
 def bland_ai_webhook():
@@ -476,11 +424,12 @@ def bland_ai_webhook():
 
     print(f"Received Bland AI webhook data for call_id {call_id}: {data}")
 
-    if call_id:
-        active_calls[call_id] = {
-            'twilio_sid': twilio_call_sid,
-            'from_number': from_number
-        }
+    # Removed active_calls logic for debugging recursion
+    # if call_id:
+    #     active_calls[call_id] = {
+    #         'twilio_sid': twilio_call_sid,
+    #         'from_number': from_number
+    #     }
 
     emit('transcript', data, broadcast=True, namespace='/') # Emit transcript data via WebSocket
 
